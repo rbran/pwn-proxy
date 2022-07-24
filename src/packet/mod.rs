@@ -198,13 +198,11 @@ packet_class!(ServerClient,
         rotation: Rotation,
         velocity: Velocity,
     },
-    ////send: 002c9d90, recv: 002ca53a
+    ////send: 00327833, recv: 002ca53a
     Position(0x766d) => {
         actor: Actor,
         position: Position,
         rotation: Rotation,
-        forward_fraction: u8,
-        strafe_fraction: u8,
     },
     ////send: 00325300, recv: 002ca48b
     SpawnThisPlayer(0x7372) => {position: Position, rotation: Rotation},
