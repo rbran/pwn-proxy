@@ -162,7 +162,7 @@ packet_class!(ServerClient,
         x4: f32
     },
     ////send: 00324820, recv: 002c9f83
-    HealthUpdate(0x2b2b) => {actor: Actor, x1: u32, x2: u32},
+    HealthUpdate(0x2b2b) => {actor: Actor, x1: u32},
     ////send: 00326f50, recv: 002c9fdb
     Kill(0x392d) => {
         dead: Actor,
