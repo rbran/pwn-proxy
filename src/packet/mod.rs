@@ -200,9 +200,9 @@ packet_class!(ServerClient,
     },
     ////send: 002c9d90, recv: 002ca53a
     Position(0x766d) => {
+        actor: Actor,
         position: Position,
         rotation: Rotation,
-        velocity: Velocity,
         forward_fraction: u8,
         strafe_fraction: u8,
     },
