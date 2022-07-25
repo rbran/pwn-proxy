@@ -377,9 +377,9 @@ impl Ligma for bool {
 #[async_trait]
 impl Ligma for f32 {
     async fn read(reader: &mut PacketReader) -> tokio::io::Result<f32> {
-        reader.read_f32().await
+        reader.read_f32_le().await
     }
     async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
-        writer.write_f32(*self).await
+        writer.write_f32_le(*self).await
     }
 }
