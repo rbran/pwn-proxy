@@ -95,12 +95,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let auth_req: AuthPacket = client_stream_read.read().await?;
     println!("AuthReq {:?}", auth_req);
     server_stream_write.write(&auth_req).await?;
-    println!("AuthReq Sent");
     //if valid, the server will reply with a packet with the user position
     let auth_ok: AuthOk = server_stream_read.read().await?;
     println!("AuthOk {:?}", auth_ok);
     client_stream_write.write(&auth_ok).await?;
-    println!("AuthOk Sent");
 
     //after that all packets are `ClientServer` or `ServerClient`
     let (client_sender, mut client_receiver) = mpsc::channel(1024);

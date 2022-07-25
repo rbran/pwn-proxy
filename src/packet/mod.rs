@@ -80,7 +80,6 @@ macro_rules! packet_class {
                 reader: &mut PacketReader
             ) -> tokio::io::Result<$name> {
                 let id = reader.read_u16_le().await?;
-                println!("pkt id 0x{:02x}", id);
                 match id {
                     $(
                         $value => {
