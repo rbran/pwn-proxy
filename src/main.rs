@@ -54,54 +54,63 @@ async fn net_mode(
     remote: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let client_socket = TcpListener::bind(local).await?;
-    let (client_stream, _) = client_socket.accept().await?;
-    let (client_stream_read, client_stream_write) = client_stream.into_split();
-    let mut client_stream_read = BufReader::new(client_stream_read);
-    let mut client_stream_write = BufWriter::new(client_stream_write);
 
-    let remote = remote.parse().unwrap(/*TODO*/);
-    let server_socket = TcpSocket::new_v4()?;
-    let server_stream = server_socket.connect(remote).await?;
-    let (server_stream_read, server_stream_write) = server_stream.into_split();
-    let server_stream_read = BufReader::new(server_stream_read);
-    let mut server_stream_write = BufWriter::new(server_stream_write);
-
-    //TODO timeout
-    //first the client will send an auth message
-    let auth_req = packet::AuthPacket::read(&mut client_stream_read).await?;
-    println!("AuthReq {:?}", auth_req);
-    packet::AuthPacket::write(&auth_req, &mut server_stream_write).await?;
-    server_stream_write.flush().await?;
-    //if valid, the server will reply with a packet with the user position
-    let auth_ok = packet::AuthOk::read(&mut client_stream_read).await?;
-    println!("AuthOk {:?}", auth_ok);
-    packet::AuthOk::write(&auth_ok, &mut client_stream_write).await?;
-    client_stream_write.flush().await?;
-
-    //after that all packets are `ClientServer` or `ServerClient`
-    let (client_sender, mut client_receiver) = mpsc::channel(1024);
-    let (server_sender, mut server_receiver) = mpsc::channel(1024);
-    let _cs_task =
-        tokio::spawn(packet_to_channel(client_stream_read, client_sender));
-    let _sc_task =
-        tokio::spawn(packet_to_channel(server_stream_read, server_sender));
-
-    //loop that receive server from client2server or server2client
     loop {
-        select! {
-            Some(packet) = client_receiver.recv() => {
-                //intercepted a packet from client/server
-                println!("CS: {:#?}", packet);
-                packet::ClientServer::write(&packet, &mut server_stream_write).await?;
-                server_stream_write.flush().await?;
-            },
-            Some(packet) = server_receiver.recv() => {
-                //intercepted a packet from server/client
-                println!("SC: {:#?}", packet);
-                packet::ServerClient::write(&packet, &mut client_stream_write).await?;
-                client_stream_write.flush().await?;
+        let (client_stream, _) = client_socket.accept().await?;
+        let (client_stream_read, client_stream_write) =
+            client_stream.into_split();
+        let mut client_stream_read = BufReader::new(client_stream_read);
+        let mut client_stream_write = BufWriter::new(client_stream_write);
+
+        let remote = remote.parse().unwrap(/*TODO*/);
+        let server_socket = TcpSocket::new_v4()?;
+        let server_stream = server_socket.connect(remote).await?;
+        let (server_stream_read, server_stream_write) =
+            server_stream.into_split();
+        let mut server_stream_read = BufReader::new(server_stream_read);
+        let mut server_stream_write = BufWriter::new(server_stream_write);
+
+        //TODO timeout
+        //first the client will send an auth message
+        let auth_req =
+            packet::AuthPacket::read(&mut client_stream_read).await?;
+        println!("AuthReq {:?}", auth_req);
+        packet::AuthPacket::write(&auth_req, &mut server_stream_write).await?;
+        server_stream_write.flush().await?;
+        //if valid, the server will reply with a packet with the user position
+        let auth_ok = packet::AuthOk::read(&mut server_stream_read).await?;
+        println!("AuthOk {:?}", auth_ok);
+        packet::AuthOk::write(&auth_ok, &mut client_stream_write).await?;
+        client_stream_write.flush().await?;
+
+        //after that all packets are `ClientServer` or `ServerClient`
+        let (client_sender, mut client_receiver) = mpsc::channel(1024);
+        let (server_sender, mut server_receiver) = mpsc::channel(1024);
+        let _cs_task =
+            tokio::spawn(packet_to_channel(client_stream_read, client_sender));
+        let _sc_task =
+            tokio::spawn(packet_to_channel(server_stream_read, server_sender));
+
+        //loop that receive server from client2server or server2client
+        loop {
+            select! {
+                Some(packet) = client_receiver.recv() => {
+                    //intercepted a packet from client/server
+                    println!("CS: {:#?}", packet);
+                    packet::ClientServer::write(&packet, &mut server_stream_write).await?;
+                    server_stream_write.flush().await?;
+                },
+                Some(packet) = server_receiver.recv() => {
+                    //intercepted a packet from server/client
+                    println!("SC: {:#?}", packet);
+                    packet::ServerClient::write(&packet, &mut client_stream_write).await?;
+                    client_stream_write.flush().await?;
+                }
+                else => {
+                    //TODO only for connection closed
+                    break
+                },
             }
-            else => panic!("Channel was closed"),
         }
     }
 }
