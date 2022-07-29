@@ -1,5 +1,6 @@
+use crate::{LigmaRead, LigmaWrite};
 use async_trait::async_trait;
-use crate::{PacketReader, Ligma, PacketWriter};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 #[derive(Debug, Clone)]
 pub enum Weapon {
@@ -7,16 +8,23 @@ pub enum Weapon {
 }
 
 #[async_trait]
-impl Ligma for Weapon {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<Weapon> {
-        let name: String = reader.read().await?;
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for Weapon
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<Weapon> {
+        let name = String::read(reader).await?;
         match name {
             name => Ok(Weapon::Other(name)),
         }
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for Weapon
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
         match self {
-            Weapon::Other(name) => writer.write(name).await,
+            Weapon::Other(name) => String::write(name, writer).await,
         }
     }
 }

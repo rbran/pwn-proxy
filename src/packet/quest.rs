@@ -1,5 +1,6 @@
+use crate::{LigmaRead, LigmaWrite};
 use async_trait::async_trait;
-use crate::{PacketReader, PacketWriter, Ligma};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 #[derive(Debug, Clone)]
 pub enum Quest {
@@ -7,16 +8,23 @@ pub enum Quest {
 }
 
 #[async_trait]
-impl Ligma for Quest {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<Quest> {
-        let name: String = reader.read().await?;
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for Quest
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<Quest> {
+        let name: String = String::read(reader).await?;
         match name {
             name => Ok(Quest::Other(name)),
         }
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for Quest
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
         match self {
-            Quest::Other(name) => writer.write(name).await,
+            Quest::Other(name) => String::write(name, writer).await,
         }
     }
 }

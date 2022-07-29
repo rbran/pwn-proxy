@@ -1,5 +1,6 @@
+use crate::{LigmaRead, LigmaWrite};
 use async_trait::async_trait;
-use crate::{Ligma, PacketReader, PacketWriter};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Position {
@@ -30,61 +31,97 @@ pub struct Velocity {
 }
 
 #[async_trait]
-impl Ligma for Position {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<Position> {
-        let x = reader.read().await?;
-        let y = reader.read().await?;
-        let z = reader.read().await?;
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for Position
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<Position> {
+        let x = f32::read(reader).await?;
+        let y = f32::read(reader).await?;
+        let z = f32::read(reader).await?;
         Ok(Self { x, y, z })
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
-        self.x.write(writer).await?;
-        self.y.write(writer).await?;
-        self.z.write(writer).await
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for Position
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
+        f32::write(&self.x, writer).await?;
+        f32::write(&self.y, writer).await?;
+        f32::write(&self.z, writer).await
     }
 }
 
 #[async_trait]
-impl Ligma for Rotation {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<Rotation> {
-        let r_axis = reader.read().await?;
-        let y_axis = reader.read().await?;
-        let z_axis = reader.read().await?;
-        Ok(Self { r_axis, y_axis, z_axis })
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for Rotation
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<Rotation> {
+        let r_axis = u16::read(reader).await?;
+        let y_axis = u16::read(reader).await?;
+        let z_axis = u16::read(reader).await?;
+        Ok(Self {
+            r_axis,
+            y_axis,
+            z_axis,
+        })
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
-        self.r_axis.write(writer).await?;
-        self.y_axis.write(writer).await?;
-        self.z_axis.write(writer).await
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for Rotation
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
+        u16::write(&self.r_axis, writer).await?;
+        u16::write(&self.y_axis, writer).await?;
+        u16::write(&self.z_axis, writer).await
     }
 }
 
 #[async_trait]
-impl Ligma for PrecissionRotation {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<PrecissionRotation> {
-        let r_axis = reader.read().await?;
-        let y_axis = reader.read().await?;
-        let z_axis = reader.read().await?;
-        Ok(Self { r_axis, y_axis, z_axis })
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for PrecissionRotation
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<PrecissionRotation> {
+        let r_axis = f32::read(reader).await?;
+        let y_axis = f32::read(reader).await?;
+        let z_axis = f32::read(reader).await?;
+        Ok(Self {
+            r_axis,
+            y_axis,
+            z_axis,
+        })
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
-        self.r_axis.write(writer).await?;
-        self.y_axis.write(writer).await?;
-        self.z_axis.write(writer).await
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for PrecissionRotation
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
+        f32::write(&self.r_axis, writer).await?;
+        f32::write(&self.y_axis, writer).await?;
+        f32::write(&self.z_axis, writer).await
     }
 }
 
 #[async_trait]
-impl Ligma for Velocity {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<Velocity> {
-        let x = reader.read().await?;
-        let y = reader.read().await?;
-        let z = reader.read().await?;
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for Velocity
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<Velocity> {
+        let x = u16::read(reader).await?;
+        let y = u16::read(reader).await?;
+        let z = u16::read(reader).await?;
         Ok(Self { x, y, z })
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
-        self.x.write(writer).await?;
-        self.y.write(writer).await?;
-        self.z.write(writer).await
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for Velocity
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
+        u16::write(&self.x, writer).await?;
+        u16::write(&self.y, writer).await?;
+        u16::write(&self.z, writer).await
     }
 }

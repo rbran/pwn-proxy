@@ -4,6 +4,7 @@ mod location;
 mod position;
 mod quest;
 mod weapon;
+
 use actor::*;
 use item::*;
 use location::*;
@@ -11,9 +12,9 @@ use position::*;
 use quest::*;
 use weapon::*;
 
-use crate::{Ligma, PacketReader, PacketWriter};
+use crate::{LigmaRead, LigmaWrite};
 use async_trait::async_trait;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 //recv: 00242760
 #[derive(Debug, Clone)]
@@ -30,34 +31,46 @@ pub struct AuthOk {
 }
 
 #[async_trait]
-impl Ligma for AuthPacket {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<AuthPacket> {
+impl<R: AsyncRead + Sized + Sync + Send + std::marker::Unpin> LigmaRead<R>
+    for AuthPacket
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<AuthPacket> {
         Ok(Self {
-            actor: reader.read().await?,
-            token: reader.read().await?,
+            actor: Actor::read(reader).await?,
+            token: String::read(reader).await?,
         })
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
-        writer.write(&self.actor).await?;
-        writer.write(&self.token).await?;
-        writer.flush().await
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Sync + Send + std::marker::Unpin> LigmaWrite<W>
+    for AuthPacket
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
+        Actor::write(&self.actor, writer).await?;
+        String::write(&self.token, writer).await
     }
 }
 
 #[async_trait]
-impl Ligma for AuthOk {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<AuthOk> {
+impl<R: AsyncRead + Sized + Sync + Send + std::marker::Unpin> LigmaRead<R>
+    for AuthOk
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<AuthOk> {
         Ok(Self {
-            x0: reader.read().await?,
-            position: reader.read().await?,
-            rotation: reader.read().await?,
+            x0: u32::read(reader).await?,
+            position: Position::read(reader).await?,
+            rotation: Rotation::read(reader).await?,
         })
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
-        writer.write(&self.x0).await?;
-        writer.write(&self.position).await?;
-        writer.write(&self.rotation).await?;
-        writer.flush().await
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Sync + Send + std::marker::Unpin> LigmaWrite<W>
+    for AuthOk
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
+        u32::write(&self.x0, writer).await?;
+        Position::write(&self.position, writer).await?;
+        Rotation::write(&self.rotation, writer).await
     }
 }
 
@@ -75,9 +88,9 @@ macro_rules! packet_class {
             )*
         }
         #[async_trait]
-        impl Ligma for $name {
+        impl<R: AsyncRead + Sized + Sync + Send + std::marker::Unpin> LigmaRead<R> for $name {
             async fn read(
-                reader: &mut PacketReader
+                reader: &mut R
             ) -> tokio::io::Result<$name> {
                 let id = reader.read_u16_le().await?;
                 match id {
@@ -85,7 +98,7 @@ macro_rules! packet_class {
                         $value => {
                             Ok($name::$packet_name{
                                 $(
-                                    $param_name: <$param_type as Ligma>::read(
+                                    $param_name: <$param_type as LigmaRead<R>>::read(
                                         reader
                                     ).await?
                                 ),*
@@ -95,18 +108,23 @@ macro_rules! packet_class {
                     id => unreachable!("Unknown id packet 0x{:04x}", id),
                 }
             }
+        }
+        #[async_trait]
+        impl<W: AsyncWrite + Sized + Sync + Send+ std::marker::Unpin> LigmaWrite<W> for $name {
             async fn write(
                 &self,
-                writer: &mut PacketWriter
+                writer: &mut W
             ) -> tokio::io::Result<()> {
                 match self {
                     $(
                      $name::$packet_name{$($param_name),*} => {
                         writer.write_u16_le($value).await?;
                         $(
-                            writer.write($param_name).await?;
+                            <$param_type as LigmaWrite<W>>::write(
+                                $param_name,
+                                writer,
+                            ).await?;
                         )*
-                        writer.flush().await?;
                      }
                     )*
                 }
@@ -311,12 +329,19 @@ packet_class!(ClientServer,
 );
 
 #[async_trait]
-impl Ligma for String {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<String> {
-        let data = <Vec<u8> as Ligma>::read(reader).await?;
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for String
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<String> {
+        let data = <Vec<u8> as LigmaRead<R>>::read(reader).await?;
         Ok(String::from_utf8(data).unwrap())
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for String
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
         writer
             .write_u16_le(self.len().try_into().unwrap(/*TODO*/))
             .await?;
@@ -324,14 +349,21 @@ impl Ligma for String {
     }
 }
 #[async_trait]
-impl Ligma for Vec<u8> {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<Vec<u8>> {
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for Vec<u8>
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<Vec<u8>> {
         let len = reader.read_u16_le().await?;
         let mut data = vec![0; len.into()];
         reader.read_exact(&mut data).await?;
         Ok(data)
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for Vec<u8>
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
         writer
             .write_u16(self.len().try_into().unwrap(/*TODO*/))
             .await?;
@@ -339,47 +371,82 @@ impl Ligma for Vec<u8> {
     }
 }
 #[async_trait]
-impl Ligma for u32 {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<u32> {
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for u32
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<u32> {
         reader.read_u32_le().await
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for u32
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
         writer.write_u32_le(*self).await
     }
 }
 #[async_trait]
-impl Ligma for u16 {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<u16> {
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for u16
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<u16> {
         reader.read_u16_le().await
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for u16
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
         writer.write_u16_le(*self).await
     }
 }
 #[async_trait]
-impl Ligma for u8 {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<u8> {
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for u8
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<u8> {
         reader.read_u8().await
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for u8
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
         writer.write_u8(*self).await
     }
 }
 #[async_trait]
-impl Ligma for bool {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<bool> {
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for bool
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<bool> {
         reader.read_u8().await.map(|x| x != 0)
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for bool
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
         writer.write_u8((*self).into()).await
     }
 }
 #[async_trait]
-impl Ligma for f32 {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<f32> {
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for f32
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<f32> {
         reader.read_f32_le().await
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for f32
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
         writer.write_f32_le(*self).await
     }
 }

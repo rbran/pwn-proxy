@@ -1,6 +1,7 @@
 use async_trait::async_trait;
+use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::{Ligma, PacketReader, PacketWriter};
+use crate::{LigmaRead, LigmaWrite};
 
 #[derive(Debug, Clone)]
 pub enum ItemName {
@@ -13,31 +14,45 @@ pub enum ItemId {
 }
 
 #[async_trait]
-impl Ligma for ItemName {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<ItemName> {
-        let name: String = reader.read().await?;
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for ItemName
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<ItemName> {
+        let name = String::read(reader).await?;
         match name {
             name => Ok(ItemName::Other(name)),
         }
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for ItemName
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
         match self {
-            ItemName::Other(name) => writer.write(name).await,
+            ItemName::Other(name) => String::write(name, writer).await,
         }
     }
 }
 
 #[async_trait]
-impl Ligma for ItemId {
-    async fn read(reader: &mut PacketReader) -> tokio::io::Result<ItemId> {
-        let id = reader.read().await?;
+impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
+    for ItemId
+{
+    async fn read(reader: &mut R) -> tokio::io::Result<ItemId> {
+        let id = u32::read(reader).await?;
         match id {
             id => Ok(ItemId::Other(id)),
         }
     }
-    async fn write(&self, writer: &mut PacketWriter) -> tokio::io::Result<()> {
+}
+#[async_trait]
+impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
+    for ItemId
+{
+    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
         match self {
-            ItemId::Other(id) => writer.write(id).await,
+            ItemId::Other(id) => u32::write(id, writer).await,
         }
     }
 }
