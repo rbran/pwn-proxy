@@ -1,4 +1,5 @@
 mod actor;
+mod circuit;
 mod item;
 mod location;
 mod position;
@@ -6,6 +7,7 @@ mod quest;
 mod weapon;
 
 use actor::*;
+use circuit::*;
 use item::*;
 use location::*;
 use position::*;
@@ -165,7 +167,7 @@ packet_class!(ServerClient,
         strafe_fraction: u8,
     },
     ////send: 00327130, recv: 002c9faf
-    CircuitOutput(0x3130) => {x0: String, x1: u32, x2: String},
+    CircuitOutput(0x3130) => {x0: String, x1: u32, x2: Circuit},
     ////send: 00324980, recv: 002ca184
     CountdownUpdate(0x6463) => {count: u32},
     ////send: 00325050, recv: 002ca521
@@ -284,7 +286,7 @@ packet_class!(ClientServer,
     //send: 002c5aa0, recv: 00242b5a
     Chat(0x2a23) => {message: String},
     ////send: 002c4720, recv: 00242b92
-    CircuitOutput(0x3130) => {x0: Vec<u8>, x1: u32},
+    CircuitOutput(0x3130) => {x0: String, x1: u32},
     ////send: 002c6840, recv: 00242d36
     EquipItem(0x3d69) => {x0: u8, item: ItemName},
     ////send: 002c5f80, recv: 00242d52
@@ -333,7 +335,9 @@ impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
     for String
 {
     async fn read(reader: &mut R) -> tokio::io::Result<String> {
-        let data = <Vec<u8> as LigmaRead<R>>::read(reader).await?;
+        let len = reader.read_u16_le().await?;
+        let mut data = vec![0; len.into()];
+        reader.read_exact(&mut data).await?;
         Ok(String::from_utf8(data).unwrap())
     }
 }
@@ -346,28 +350,6 @@ impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
             .write_u16_le(self.len().try_into().unwrap(/*TODO*/))
             .await?;
         writer.write_all(self.as_bytes()).await
-    }
-}
-#[async_trait]
-impl<R: AsyncRead + Sized + Send + Sync + std::marker::Unpin> LigmaRead<R>
-    for Vec<u8>
-{
-    async fn read(reader: &mut R) -> tokio::io::Result<Vec<u8>> {
-        let len = reader.read_u16_le().await?;
-        let mut data = vec![0; len.into()];
-        reader.read_exact(&mut data).await?;
-        Ok(data)
-    }
-}
-#[async_trait]
-impl<W: AsyncWrite + Sized + Send + Sync + std::marker::Unpin> LigmaWrite<W>
-    for Vec<u8>
-{
-    async fn write(&self, writer: &mut W) -> tokio::io::Result<()> {
-        writer
-            .write_u16(self.len().try_into().unwrap(/*TODO*/))
-            .await?;
-        writer.write_all(&self).await
     }
 }
 #[async_trait]
